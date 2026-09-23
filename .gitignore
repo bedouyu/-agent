@@ -6,5 +6,11 @@
 **/bin/
 **/obj/
 data/
+tmp/
+# 论文内容属于本机数据，不提交到 Git；代码内若以后需要模板可单独强制加入。
+*.tex
+*.bib
+*.pdf
+*.docx
 *.user
 *.suo

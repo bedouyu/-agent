@@ -18,15 +18,18 @@ public class PaperDocumentService {
     private final PaperProjectRepository projectRepository;
     private final PaperDocumentRepository documentRepository;
     private final DocumentStorageService storageService;
+    private final LatexCompileService latexCompileService;
 
     public PaperDocumentService(
             PaperProjectRepository projectRepository,
             PaperDocumentRepository documentRepository,
-            DocumentStorageService storageService
+            DocumentStorageService storageService,
+            LatexCompileService latexCompileService
     ) {
         this.projectRepository = projectRepository;
         this.documentRepository = documentRepository;
         this.storageService = storageService;
+        this.latexCompileService = latexCompileService;
     }
 
     @Transactional
@@ -64,14 +67,73 @@ public class PaperDocumentService {
 
     @Transactional(readOnly = true)
     public DownloadableDocument download(String projectId, String documentId) {
-        PaperDocument document = documentRepository.findByIdAndProject_Id(documentId, projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("论文文档不存在"));
+        PaperDocument document = requireDocument(projectId, documentId);
         Resource resource = storageService.load(document.getStoredRelativePath());
         return new DownloadableDocument(
                 document.getOriginalFileName(),
                 document.getContentType(),
                 resource
         );
+    }
+
+    @Transactional(readOnly = true)
+    public LatexCompilationResponse compileLatex(String projectId, String documentId) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.compile(workspaceOf(document));
+    }
+
+    @Transactional(readOnly = true)
+    public PdfPreviewResponse getPdfPreview(String projectId, String documentId) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.getPreview(workspaceOf(document));
+    }
+
+    @Transactional(readOnly = true)
+    public Resource getPdfPreviewPage(String projectId, String documentId, int pageNumber) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.loadPreviewPage(workspaceOf(document), pageNumber);
+    }
+
+    @Transactional(readOnly = true)
+    public Resource getPdf(String projectId, String documentId) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.loadPdf(workspaceOf(document));
+    }
+
+    @Transactional(readOnly = true)
+    public SourceFileResponse getSource(String projectId, String documentId, String path) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.readSource(workspaceOf(document), path);
+    }
+
+    @Transactional(readOnly = true)
+    public SyncTexResponse syncFromPdf(
+            String projectId,
+            String documentId,
+            int page,
+            double x,
+            double y
+    ) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        return latexCompileService.syncFromPdf(workspaceOf(document), page, x, y);
+    }
+
+    @Transactional(readOnly = true)
+    public void openPdf(String projectId, String documentId) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        latexCompileService.openPdf(workspaceOf(document));
+    }
+
+    private DocumentStorageService.LatexWorkspace workspaceOf(PaperDocument document) {
+        return storageService.resolveLatexWorkspace(
+                document.getStoredRelativePath(),
+                document.getContentType()
+        );
+    }
+
+    private PaperDocument requireDocument(String projectId, String documentId) {
+        return documentRepository.findByIdAndProject_Id(documentId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("论文文档不存在"));
     }
 
     private void requireProject(String projectId) {

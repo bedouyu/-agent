@@ -17,9 +17,16 @@ spring:
     default-property-inclusion: non_null
 
 server:
+  # 本机单人模式只监听回环地址，局域网中的其他电脑无法访问论文接口。
+  address: 127.0.0.1
   port: 18080
   error:
     include-message: never
 
 app:
   data-dir: ${APP_DATA_DIR:./data}
+  latex:
+    # 默认使用本机 TeX Live 2026；换电脑时可设置 LATEX_BIN_DIR 环境变量覆盖。
+    bin-dir: ${LATEX_BIN_DIR:D:/texlive/texlive/2026/bin/windows}
+    compile-timeout-seconds: 180
+    preview-dpi: 144

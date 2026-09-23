@@ -13,8 +13,14 @@ public sealed class MainViewModel : ObservableObject
     private string _newProjectName = string.Empty;
     private string _newProjectDescription = string.Empty;
     private string _statusMessage = "正在连接本机服务……";
+    private string _sourceText = string.Empty;
+    private string _sourcePath = "请先选择 LaTeX 文档";
+    private string _compilationLog = "尚未编译。";
+    private string _pdfPreviewHint = "编译成功后，这里会显示 PDF 页面。";
     private PaperProject? _selectedProject;
+    private PaperDocument? _selectedDocument;
     private int _documentLoadVersion;
+    private int _latexLoadVersion;
 
     public MainViewModel(PaperProjectApiClient apiClient, DocumentFilePicker filePicker)
     {
@@ -23,17 +29,25 @@ public sealed class MainViewModel : ObservableObject
         CreateProjectCommand = new AsyncRelayCommand(CreateProjectAsync, CanCreateProject);
         RefreshCommand = new AsyncRelayCommand(LoadProjectsAsync);
         UploadDocumentCommand = new AsyncRelayCommand(UploadDocumentAsync, CanUploadDocument);
+        CompileLatexCommand = new AsyncRelayCommand(CompileLatexAsync, CanUseLatexDocument);
+        OpenPdfCommand = new AsyncRelayCommand(OpenPdfAsync, CanUseLatexDocument);
     }
 
     public ObservableCollection<PaperProject> Projects { get; } = [];
 
     public ObservableCollection<PaperDocument> Documents { get; } = [];
 
+    public ObservableCollection<PdfPagePreview> PdfPages { get; } = [];
+
     public AsyncRelayCommand CreateProjectCommand { get; }
 
     public AsyncRelayCommand RefreshCommand { get; }
 
     public AsyncRelayCommand UploadDocumentCommand { get; }
+
+    public AsyncRelayCommand CompileLatexCommand { get; }
+
+    public AsyncRelayCommand OpenPdfCommand { get; }
 
     public PaperProject? SelectedProject
     {
@@ -46,6 +60,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             UploadDocumentCommand.RaiseCanExecuteChanged();
+            SelectedDocument = null;
             Documents.Clear();
             int loadVersion = ++_documentLoadVersion;
 
@@ -56,6 +71,28 @@ public sealed class MainViewModel : ObservableObject
             }
 
             _ = LoadDocumentsAsync(value, loadVersion);
+        }
+    }
+
+    public PaperDocument? SelectedDocument
+    {
+        get => _selectedDocument;
+        set
+        {
+            if (!SetProperty(ref _selectedDocument, value))
+            {
+                return;
+            }
+
+            CompileLatexCommand.RaiseCanExecuteChanged();
+            OpenPdfCommand.RaiseCanExecuteChanged();
+            ClearLatexWorkspace();
+            int loadVersion = ++_latexLoadVersion;
+
+            if (value?.IsLatex == true && SelectedProject is not null)
+            {
+                _ = LoadLatexWorkspaceAsync(SelectedProject, value, loadVersion);
+            }
         }
     }
 
@@ -75,6 +112,30 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _newProjectDescription;
         set => SetProperty(ref _newProjectDescription, value);
+    }
+
+    public string SourceText
+    {
+        get => _sourceText;
+        private set => SetProperty(ref _sourceText, value);
+    }
+
+    public string SourcePath
+    {
+        get => _sourcePath;
+        private set => SetProperty(ref _sourcePath, value);
+    }
+
+    public string CompilationLog
+    {
+        get => _compilationLog;
+        private set => SetProperty(ref _compilationLog, value);
+    }
+
+    public string PdfPreviewHint
+    {
+        get => _pdfPreviewHint;
+        private set => SetProperty(ref _pdfPreviewHint, value);
     }
 
     public string StatusMessage
@@ -115,10 +176,46 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private bool CanCreateProject()
+    /// <summary>根据 PDF point 坐标定位源码，窗口随后负责滚动并选中对应行。</summary>
+    public async Task<SyncTexResult?> NavigateFromPdfAsync(
+        PdfPagePreview page,
+        double xPoints,
+        double yPoints)
     {
-        return !string.IsNullOrWhiteSpace(NewProjectName);
+        PaperProject? project = SelectedProject;
+        PaperDocument? document = SelectedDocument;
+        if (project is null || document?.IsLatex != true)
+        {
+            return null;
+        }
+
+        try
+        {
+            StatusMessage = $"正在定位第 {page.PageNumber} 页对应的源码……";
+            SyncTexResult result = await _apiClient.SyncFromPdfAsync(
+                project.Id,
+                document.Id,
+                page.PageNumber,
+                xPoints,
+                yPoints);
+            SourceFileContent source = await _apiClient.GetSourceAsync(
+                project.Id,
+                document.Id,
+                result.SourcePath);
+
+            SourcePath = source.Path;
+            SourceText = source.Content;
+            StatusMessage = $"已定位到 {result.SourcePath} 第 {result.Line} 行。";
+            return result;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            StatusMessage = $"定位失败：{exception.Message}";
+            return null;
+        }
     }
+
+    private bool CanCreateProject() => !string.IsNullOrWhiteSpace(NewProjectName);
 
     private async Task CreateProjectAsync()
     {
@@ -141,10 +238,9 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private bool CanUploadDocument()
-    {
-        return SelectedProject is not null;
-    }
+    private bool CanUploadDocument() => SelectedProject is not null;
+
+    private bool CanUseLatexDocument() => SelectedProject is not null && SelectedDocument?.IsLatex == true;
 
     private async Task UploadDocumentAsync()
     {
@@ -169,6 +265,7 @@ public sealed class MainViewModel : ObservableObject
             if (SelectedProject?.Id == project.Id)
             {
                 Documents.Insert(0, document);
+                SelectedDocument = document;
             }
 
             StatusMessage = $"文档“{document.OriginalFileName}”上传成功。";
@@ -180,6 +277,61 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private async Task CompileLatexAsync()
+    {
+        PaperProject? project = SelectedProject;
+        PaperDocument? document = SelectedDocument;
+        if (project is null || document?.IsLatex != true)
+        {
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "正在用 XeLaTeX 编译，请稍候……";
+            CompilationLog = "正在编译……";
+            LatexCompilationResult result = await _apiClient.CompileLatexAsync(project.Id, document.Id);
+            CompilationLog = result.Log;
+
+            if (!result.Success)
+            {
+                StatusMessage = $"编译失败（退出码 {result.ExitCode}），请查看“编译日志”。";
+                return;
+            }
+
+            await LoadPreviewAsync(project, document);
+            StatusMessage = $"编译成功：{result.PageCount} 页，用时 {result.DurationMillis / 1000d:F1} 秒。";
+        }
+        catch (TaskCanceledException)
+        {
+            StatusMessage = "编译等待超时，请查看 LaTeX 工程是否卡住。";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            StatusMessage = $"编译失败：{exception.Message}";
+        }
+    }
+
+    private async Task OpenPdfAsync()
+    {
+        PaperProject? project = SelectedProject;
+        PaperDocument? document = SelectedDocument;
+        if (project is null || document?.IsLatex != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await _apiClient.OpenPdfAsync(project.Id, document.Id);
+            StatusMessage = "已交给系统默认 PDF 阅读器打开。";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            StatusMessage = $"打开 PDF 失败：{exception.Message}";
+        }
+    }
+
     private async Task LoadDocumentsAsync(PaperProject project, int loadVersion)
     {
         try
@@ -187,7 +339,6 @@ public sealed class MainViewModel : ObservableObject
             StatusMessage = $"正在读取项目“{project.Name}”的文档……";
             var documents = await _apiClient.GetDocumentsAsync(project.Id);
 
-            // 用户可能在请求期间选择了另一个项目，旧结果不应覆盖新项目。
             if (loadVersion != _documentLoadVersion || SelectedProject?.Id != project.Id)
             {
                 return;
@@ -199,6 +350,7 @@ public sealed class MainViewModel : ObservableObject
                 Documents.Add(document);
             }
 
+            SelectedDocument = Documents.FirstOrDefault();
             StatusMessage = $"项目“{project.Name}”共有 {Documents.Count} 个论文源文件。";
         }
         catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
@@ -208,5 +360,67 @@ public sealed class MainViewModel : ObservableObject
                 StatusMessage = $"读取文档失败：{exception.Message}";
             }
         }
+    }
+
+    private async Task LoadLatexWorkspaceAsync(
+        PaperProject project,
+        PaperDocument document,
+        int loadVersion)
+    {
+        try
+        {
+            SourceFileContent source = await _apiClient.GetSourceAsync(project.Id, document.Id);
+            if (loadVersion != _latexLoadVersion || SelectedDocument?.Id != document.Id)
+            {
+                return;
+            }
+
+            SourcePath = source.Path;
+            SourceText = source.Content;
+
+            try
+            {
+                await LoadPreviewAsync(project, document);
+                StatusMessage = "已载入源码和上次编译的 PDF；点击 PDF 可定位源码。";
+            }
+            catch (PaperAgentApiException)
+            {
+                PdfPreviewHint = "尚无 PDF 预览，请点击“编译 LaTeX”。";
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            if (loadVersion == _latexLoadVersion)
+            {
+                StatusMessage = $"读取 LaTeX 工作区失败：{exception.Message}";
+            }
+        }
+    }
+
+    private async Task LoadPreviewAsync(PaperProject project, PaperDocument document)
+    {
+        IReadOnlyList<PdfPagePreview> pages = await _apiClient.GetPdfPreviewAsync(project.Id, document.Id);
+        if (SelectedProject?.Id != project.Id || SelectedDocument?.Id != document.Id)
+        {
+            return;
+        }
+
+        PdfPages.Clear();
+        foreach (PdfPagePreview page in pages)
+        {
+            PdfPages.Add(page);
+        }
+        PdfPreviewHint = $"共 {pages.Count} 页。单击正文位置可跳转到对应 LaTeX 行。";
+    }
+
+    private void ClearLatexWorkspace()
+    {
+        PdfPages.Clear();
+        SourceText = string.Empty;
+        SourcePath = SelectedDocument?.IsLatex == true ? "正在读取源码……" : "请选择 LaTeX 文档";
+        CompilationLog = "尚未在本次会话中编译。";
+        PdfPreviewHint = SelectedDocument?.IsLatex == true
+            ? "正在检查 PDF 预览……"
+            : "编译成功后，这里会显示 PDF 页面。";
     }
 }

@@ -23,7 +23,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
 /**
- * 负责 DOCX 文件的校验和本地存储。
+ * 负责论文源文件的校验和本地存储。
  *
  * <p>数据库层不直接操作文件，便于以后切换到对象存储或网络磁盘。</p>
  */
@@ -63,6 +63,8 @@ public class DocumentStorageService {
             moveIntoPlace(temporaryFile, targetFile);
             if (sourceFileType == SourceFileType.LATEX_PROJECT) {
                 extractLatexProject(targetFile, documentDirectory.resolve("workspace"));
+            } else if (sourceFileType == SourceFileType.LATEX) {
+                prepareSingleFileWorkspace(targetFile, documentDirectory.resolve("workspace"));
             }
 
             String relativePath = dataRoot.relativize(targetFile).toString();
@@ -94,6 +96,66 @@ public class DocumentStorageService {
         } catch (IOException exception) {
             throw new DocumentStorageException("读取 DOCX 文件失败", exception);
         }
+    }
+
+    /**
+     * 找到一个可编译的 LaTeX 工作区。
+     *
+     * <p>ZIP 工程可能带一层中文目录，因此不能假定 main.tex 一定位于 workspace 根目录。</p>
+     */
+    public LatexWorkspace resolveLatexWorkspace(String relativePath, String contentType) {
+        if (!LATEX_CONTENT_TYPE.equals(contentType)
+                && !LATEX_PROJECT_CONTENT_TYPE.equals(contentType)) {
+            throw new DocumentValidationException("所选文件不是 LaTeX 源码或 LaTeX 工程");
+        }
+
+        Path storedFile = safeResolve(relativePath);
+        Path documentDirectory = storedFile.getParent();
+        Path workspace = documentDirectory.resolve("workspace").normalize();
+
+        try {
+            if (LATEX_CONTENT_TYPE.equals(contentType)
+                    && !Files.isRegularFile(workspace.resolve("main.tex"))) {
+                prepareSingleFileWorkspace(storedFile, workspace);
+            }
+
+            Path mainFile = findMainTex(workspace);
+            String pdfName = removeExtension(mainFile.getFileName().toString()) + ".pdf";
+            return new LatexWorkspace(
+                    workspace,
+                    mainFile,
+                    mainFile.getParent().resolve(pdfName),
+                    documentDirectory.resolve("preview")
+            );
+        } catch (IOException exception) {
+            throw new DocumentStorageException("准备 LaTeX 工作区失败", exception);
+        }
+    }
+
+    public Resource loadWorkspaceFile(LatexWorkspace workspace, Path file) {
+        Path normalized = file.toAbsolutePath().normalize();
+        Path documentDirectory = workspace.root().getParent().toAbsolutePath().normalize();
+        if (!normalized.startsWith(documentDirectory) || !Files.isRegularFile(normalized)) {
+            throw new DocumentValidationException("请求的工作区文件不存在或路径不安全");
+        }
+
+        try {
+            return new UrlResource(normalized.toUri());
+        } catch (IOException exception) {
+            throw new DocumentStorageException("读取工作区文件失败", exception);
+        }
+    }
+
+    public Path resolveSourceFile(LatexWorkspace workspace, String relativePath) {
+        Path source = relativePath == null || relativePath.isBlank()
+                ? workspace.mainFile()
+                : workspace.root().resolve(relativePath).normalize();
+        if (!source.startsWith(workspace.root())
+                || !Files.isRegularFile(source)
+                || !source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".tex")) {
+            throw new DocumentValidationException("LaTeX 源文件不存在或路径不安全");
+        }
+        return source;
     }
 
     public void deleteQuietly(String relativePath) {
@@ -238,6 +300,36 @@ public class DocumentStorageService {
         }
     }
 
+    private void prepareSingleFileWorkspace(Path source, Path workspace) throws IOException {
+        Files.createDirectories(workspace);
+        Files.copy(source, workspace.resolve("main.tex"), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private Path findMainTex(Path workspace) throws IOException {
+        if (!Files.isDirectory(workspace)) {
+            throw new DocumentValidationException("LaTeX 工作区不存在");
+        }
+
+        try (var files = Files.find(
+                workspace,
+                20,
+                (path, attributes) -> attributes.isRegularFile()
+                        && path.getFileName().toString().equalsIgnoreCase("main.tex")
+        )) {
+            return files.sorted(
+                            Comparator.comparingInt((Path path) -> workspace.relativize(path).getNameCount())
+                                    .thenComparing(Path::toString)
+                    )
+                    .findFirst()
+                    .orElseThrow(() -> new DocumentValidationException("LaTeX 工作区中没有找到 main.tex"));
+        }
+    }
+
+    private String removeExtension(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+
     private void validateArchiveEntryName(String entryName) {
         String normalized = entryName.replace('\\', '/');
         if (normalized.isBlank()
@@ -315,5 +407,13 @@ public class DocumentStorageService {
         public String contentType() {
             return contentType;
         }
+    }
+
+    public record LatexWorkspace(
+            Path root,
+            Path mainFile,
+            Path pdfFile,
+            Path previewDirectory
+    ) {
     }
 }

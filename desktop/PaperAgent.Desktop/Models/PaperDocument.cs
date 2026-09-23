@@ -30,4 +30,6 @@ public sealed class PaperDocument
         "text/x-tex" => "LaTeX",
         _ => "Word"
     };
+
+    public bool IsLatex => ContentType is "application/zip" or "text/x-tex";
 }

@@ -71,6 +71,9 @@ class DocumentStorageServiceTest {
                 .isEqualTo(Path.of("documents", "project-1", "document-2", "source.tex").toString());
         assertThat(Files.readAllBytes(temporaryDirectory.resolve(stored.relativePath())))
                 .isEqualTo(source);
+        assertThat(Files.readAllBytes(temporaryDirectory.resolve(
+                "documents/project-1/document-2/workspace/main.tex"
+        ))).isEqualTo(source);
     }
 
     @Test
@@ -93,6 +96,12 @@ class DocumentStorageServiceTest {
         assertThat(Files.isRegularFile(documentDirectory.resolve("project.zip"))).isTrue();
         assertThat(Files.isRegularFile(documentDirectory.resolve("workspace/main.tex"))).isTrue();
         assertThat(Files.isRegularFile(documentDirectory.resolve("workspace/chapters/body.tex"))).isTrue();
+
+        DocumentStorageService.LatexWorkspace workspace = service.resolveLatexWorkspace(
+                stored.relativePath(),
+                stored.contentType()
+        );
+        assertThat(workspace.mainFile()).isEqualTo(documentDirectory.resolve("workspace/main.tex"));
     }
 
     @Test

@@ -28,6 +28,9 @@ class PaperDocumentServiceTest {
     @Mock
     private DocumentStorageService storageService;
 
+    @Mock
+    private LatexCompileService latexCompileService;
+
     @Test
     void uploadShouldConnectTheStoredFileToItsProject() {
         PaperProject project = new PaperProject("毕业论文", "格式修改练习");
@@ -50,7 +53,8 @@ class PaperDocumentServiceTest {
         PaperDocumentService service = new PaperDocumentService(
                 projectRepository,
                 documentRepository,
-                storageService
+                storageService,
+                latexCompileService
         );
         PaperDocumentResponse response = service.upload(project.getId(), file);
 

@@ -2,6 +2,7 @@ package com.paperagent.common;
 
 import com.paperagent.document.DocumentStorageException;
 import com.paperagent.document.DocumentValidationException;
+import com.paperagent.document.LatexToolUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiError handleStorage(DocumentStorageException exception) {
         return error("STORAGE_FAILED", exception.getMessage());
+    }
+
+    @ExceptionHandler(LatexToolUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiError handleLatexToolUnavailable(LatexToolUnavailableException exception) {
+        return error("LATEX_TOOL_UNAVAILABLE", exception.getMessage());
     }
 
     private ApiError error(String code, String message) {

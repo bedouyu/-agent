@@ -16,7 +16,8 @@ public partial class App : Application
         var httpClient = new HttpClient
         {
             BaseAddress = new Uri("http://127.0.0.1:18080/"),
-            Timeout = TimeSpan.FromSeconds(10)
+            // LaTeX 首次编译可能需要几十秒，超时应长于后端的 180 秒限制。
+            Timeout = TimeSpan.FromMinutes(4)
         };
 
         var apiClient = new PaperProjectApiClient(httpClient);
