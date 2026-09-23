@@ -1,0 +1,28 @@
+### 1. 检查后端是否启动
+GET http://127.0.0.1:18080/api/health
+
+### 2. 创建论文项目
+POST http://127.0.0.1:18080/api/projects
+Content-Type: application/json
+
+{
+  "name": "毕业论文",
+  "description": "用于练习论文格式检查"
+}
+
+### 3. 查询所有项目
+GET http://127.0.0.1:18080/api/projects
+
+### 4. 上传 LaTeX 源码（先把下面的项目 ID 和文件路径改成真实值）
+POST http://127.0.0.1:18080/api/projects/项目ID/documents
+Content-Type: multipart/form-data; boundary=PaperAgentBoundary
+
+--PaperAgentBoundary
+Content-Disposition: form-data; name="file"; filename="main.tex"
+Content-Type: text/x-tex
+
+< D:/main.tex
+--PaperAgentBoundary--
+
+### 5. 查询项目中的文档
+GET http://127.0.0.1:18080/api/projects/项目ID/documents

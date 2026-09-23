@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: paper-agent-backend
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  datasource:
+    url: jdbc:h2:file:${APP_DATA_DIR:./data}/localdb/paper_agent;MODE=MySQL;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: 18080
+  error:
+    include-message: never
+
+app:
+  data-dir: ${APP_DATA_DIR:./data}

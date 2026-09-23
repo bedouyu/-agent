@@ -1,0 +1,53 @@
+using System.Windows.Input;
+
+namespace PaperAgent.Desktop.ViewModels;
+
+/// <summary>
+/// 将异步方法包装成 WPF Button 可以绑定的 ICommand。
+/// 执行期间自动禁用按钮，避免用户重复点击。
+/// </summary>
+public sealed class AsyncRelayCommand : ICommand
+{
+    private readonly Func<Task> _execute;
+    private readonly Func<bool>? _canExecute;
+    private bool _isRunning;
+
+    public AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
+    {
+        _execute = execute;
+        _canExecute = canExecute;
+    }
+
+    public event EventHandler? CanExecuteChanged;
+
+    public bool CanExecute(object? parameter)
+    {
+        return !_isRunning && (_canExecute?.Invoke() ?? true);
+    }
+
+    public async void Execute(object? parameter)
+    {
+        if (!CanExecute(parameter))
+        {
+            return;
+        }
+
+        try
+        {
+            _isRunning = true;
+            RaiseCanExecuteChanged();
+            await _execute();
+        }
+        finally
+        {
+            _isRunning = false;
+            RaiseCanExecuteChanged();
+        }
+    }
+
+    public void RaiseCanExecuteChanged()
+    {
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
+

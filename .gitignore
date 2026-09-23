@@ -1,0 +1,10 @@
+.env
+.cache/
+.idea/
+.vscode/
+**/target/
+**/bin/
+**/obj/
+data/
+*.user
+*.suo

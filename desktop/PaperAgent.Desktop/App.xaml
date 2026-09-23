@@ -1,0 +1,17 @@
+<Application x:Class="PaperAgent.Desktop.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#2457D6" />
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0,4,0,12" />
+        </Style>
+    </Application.Resources>
+</Application>
+
