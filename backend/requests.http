@@ -38,3 +38,17 @@ GET http://127.0.0.1:18080/api/projects/项目ID/documents/文档ID/synctex?page
 
 ### 9. 读取 main.tex；多文件工程可增加 ?path=chapters/body.tex
 GET http://127.0.0.1:18080/api/projects/项目ID/documents/文档ID/source
+
+### 10. 检查 AI 密钥是否已被后端读取（不会返回密钥本身）
+GET http://127.0.0.1:18080/api/ai/status
+
+### 11. 请求选中 LaTeX 片段的建议（先把 selectedText 换成 sourcePath 对应文件中真实存在的文字；会产生 API 请求）
+POST http://127.0.0.1:18080/api/ai/projects/项目ID/documents/文档ID/suggest
+Content-Type: application/json
+
+{
+  "sourcePath": "main.tex",
+  "selectedText": "这是从 main.tex 中选中的真实内容。",
+  "mode": "POLISH",
+  "model": "deepseek-flash"
+}

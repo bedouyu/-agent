@@ -1,5 +1,8 @@
 package com.paperagent.document;
 
+import com.paperagent.ai.AiSuggestionRequest;
+import com.paperagent.ai.AiSuggestionResponse;
+import com.paperagent.ai.DeepSeekService;
 import com.paperagent.common.ResourceNotFoundException;
 import com.paperagent.project.PaperProject;
 import com.paperagent.project.PaperProjectRepository;
@@ -19,17 +22,20 @@ public class PaperDocumentService {
     private final PaperDocumentRepository documentRepository;
     private final DocumentStorageService storageService;
     private final LatexCompileService latexCompileService;
+    private final DeepSeekService deepSeekService;
 
     public PaperDocumentService(
             PaperProjectRepository projectRepository,
             PaperDocumentRepository documentRepository,
             DocumentStorageService storageService,
-            LatexCompileService latexCompileService
+            LatexCompileService latexCompileService,
+            DeepSeekService deepSeekService
     ) {
         this.projectRepository = projectRepository;
         this.documentRepository = documentRepository;
         this.storageService = storageService;
         this.latexCompileService = latexCompileService;
+        this.deepSeekService = deepSeekService;
     }
 
     @Transactional
@@ -122,6 +128,34 @@ public class PaperDocumentService {
     public void openPdf(String projectId, String documentId) {
         PaperDocument document = requireDocument(projectId, documentId);
         latexCompileService.openPdf(workspaceOf(document));
+    }
+
+    @Transactional(readOnly = true)
+    public AiSuggestionResponse suggestWithAi(
+            String projectId,
+            String documentId,
+            AiSuggestionRequest request
+    ) {
+        PaperDocument document = requireDocument(projectId, documentId);
+        SourceFileResponse source = latexCompileService.readSource(
+                workspaceOf(document),
+                request.sourcePath()
+        );
+        String normalizedSelection = normalizeLineEndings(request.selectedText());
+        if (normalizedSelection.isBlank()
+                || !normalizeLineEndings(source.content()).contains(normalizedSelection)) {
+            throw new DocumentValidationException("选中的内容与当前 LaTeX 源文件不一致，请重新选择");
+        }
+        return deepSeekService.suggest(
+                source.path(),
+                normalizedSelection,
+                request.mode(),
+                request.model()
+        );
+    }
+
+    private String normalizeLineEndings(String text) {
+        return text == null ? "" : text.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private DocumentStorageService.LatexWorkspace workspaceOf(PaperDocument document) {

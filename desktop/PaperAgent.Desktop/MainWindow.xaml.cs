@@ -21,6 +21,51 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         await _viewModel.LoadProjectsAsync();
+        await _viewModel.LoadAiStatusAsync();
+    }
+
+    private async void OnGenerateAiSuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsAiBusy)
+        {
+            return;
+        }
+        string selectedText = SourceEditor.SelectedText;
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            MessageBox.Show(this, "请先在左侧源码中选中需要润色或检查格式的片段。", "选择源码");
+            return;
+        }
+        if (selectedText.Length > _viewModel.AiMaxSelectionCharacters)
+        {
+            MessageBox.Show(this,
+                $"每次最多发送 {_viewModel.AiMaxSelectionCharacters} 个字符，请缩小选区。",
+                "选区过长");
+            return;
+        }
+
+        string mode = (AiModePicker.SelectedItem as ComboBoxItem)?.Tag as string ?? "POLISH";
+        MessageBoxResult confirmation = MessageBox.Show(
+            this,
+            $"即将把选中的 {selectedText.Length} 个字符发送给 DeepSeek（{_viewModel.AiSelectedModel}），可能产生 API 费用。\n\n确认继续？",
+            "确认发送论文片段",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        AiTab.IsSelected = true;
+        await _viewModel.GenerateAiSuggestionAsync(selectedText, mode);
+    }
+
+    private void OnCopyAiSuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_viewModel.AiSuggestedText))
+        {
+            Clipboard.SetText(_viewModel.AiSuggestedText);
+        }
     }
 
     private async void OnPdfPageClick(object sender, MouseButtonEventArgs e)

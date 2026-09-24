@@ -17,6 +17,14 @@ public sealed class MainViewModel : ObservableObject
     private string _sourcePath = "请先选择 LaTeX 文档";
     private string _compilationLog = "尚未编译。";
     private string _pdfPreviewHint = "编译成功后，这里会显示 PDF 页面。";
+    private string _aiConfigurationStatus = "正在检查 DeepSeek 配置……";
+    private string _aiRequestStatus = "在左侧源码中选中一小段，再点击“生成 AI 建议”。";
+    private string _aiOriginalText = string.Empty;
+    private string _aiSuggestedText = string.Empty;
+    private string _aiExplanation = string.Empty;
+    private string _aiSelectedModel = "deepseek-flash";
+    private int _aiMaxSelectionCharacters = 2_000;
+    private bool _isAiBusy;
     private PaperProject? _selectedProject;
     private PaperDocument? _selectedDocument;
     private int _documentLoadVersion;
@@ -38,6 +46,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<PaperDocument> Documents { get; } = [];
 
     public ObservableCollection<PdfPagePreview> PdfPages { get; } = [];
+
+    public ObservableCollection<string> AiModels { get; } = ["deepseek-flash", "deepseek-v4-pro"];
 
     public AsyncRelayCommand CreateProjectCommand { get; }
 
@@ -87,6 +97,7 @@ public sealed class MainViewModel : ObservableObject
             CompileLatexCommand.RaiseCanExecuteChanged();
             OpenPdfCommand.RaiseCanExecuteChanged();
             ClearLatexWorkspace();
+            ClearAiSuggestion();
             int loadVersion = ++_latexLoadVersion;
 
             if (value?.IsLatex == true && SelectedProject is not null)
@@ -142,6 +153,149 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _statusMessage;
         private set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string AiConfigurationStatus
+    {
+        get => _aiConfigurationStatus;
+        private set => SetProperty(ref _aiConfigurationStatus, value);
+    }
+
+    public string AiRequestStatus
+    {
+        get => _aiRequestStatus;
+        private set => SetProperty(ref _aiRequestStatus, value);
+    }
+
+    public string AiOriginalText
+    {
+        get => _aiOriginalText;
+        private set => SetProperty(ref _aiOriginalText, value);
+    }
+
+    public string AiSuggestedText
+    {
+        get => _aiSuggestedText;
+        private set => SetProperty(ref _aiSuggestedText, value);
+    }
+
+    public string AiExplanation
+    {
+        get => _aiExplanation;
+        private set => SetProperty(ref _aiExplanation, value);
+    }
+
+    public string AiSelectedModel
+    {
+        get => _aiSelectedModel;
+        set => SetProperty(ref _aiSelectedModel, value);
+    }
+
+    public int AiMaxSelectionCharacters
+    {
+        get => _aiMaxSelectionCharacters;
+        private set => SetProperty(ref _aiMaxSelectionCharacters, value);
+    }
+
+    public bool IsAiBusy
+    {
+        get => _isAiBusy;
+        private set => SetProperty(ref _isAiBusy, value);
+    }
+
+    public async Task LoadAiStatusAsync()
+    {
+        try
+        {
+            AiStatus status = await _apiClient.GetAiStatusAsync();
+            AiConfigurationStatus = status.Configured
+                ? "已读取本机 DeepSeek 密钥。"
+                : "未读取到密钥。请在 IDEA 运行配置中设置 DEEPSEEK_API_KEY，并重启后端。";
+            AiMaxSelectionCharacters = status.MaxSelectionCharacters;
+            AiModels.Clear();
+            foreach (string model in status.Models)
+            {
+                AiModels.Add(model);
+            }
+            if (!AiModels.Contains(AiSelectedModel) && AiModels.Count > 0)
+            {
+                AiSelectedModel = AiModels[0];
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            AiConfigurationStatus = $"无法读取 AI 配置：{exception.Message}";
+        }
+    }
+
+    public async Task<bool> GenerateAiSuggestionAsync(string selectedText, string mode)
+    {
+        PaperProject? project = SelectedProject;
+        PaperDocument? document = SelectedDocument;
+        string sourcePath = SourcePath;
+        if (project is null || document?.IsLatex != true)
+        {
+            AiRequestStatus = "请先选择 LaTeX 文档。";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            AiRequestStatus = "请先在左侧源码中选中要处理的片段。";
+            return false;
+        }
+        if (selectedText.Length > AiMaxSelectionCharacters)
+        {
+            AiRequestStatus = $"选区过长；每次最多 {AiMaxSelectionCharacters} 个字符。";
+            return false;
+        }
+        if (IsAiBusy)
+        {
+            return false;
+        }
+
+        try
+        {
+            IsAiBusy = true;
+            AiRequestStatus = "正在等待 DeepSeek 返回建议……";
+            AiOriginalText = selectedText;
+            AiSuggestedText = string.Empty;
+            AiExplanation = string.Empty;
+            AiSuggestion suggestion = await _apiClient.SuggestLatexAsync(
+                project.Id,
+                document.Id,
+                sourcePath,
+                selectedText,
+                mode,
+                AiSelectedModel);
+
+            if (SelectedProject?.Id != project.Id
+                || SelectedDocument?.Id != document.Id
+                || SourcePath != sourcePath)
+            {
+                return false;
+            }
+
+            AiOriginalText = suggestion.OriginalText;
+            AiSuggestedText = suggestion.SuggestedTex;
+            AiExplanation = suggestion.Explanation;
+            AiRequestStatus = $"{suggestion.Model} 已生成建议。请对照原文检查后再手动使用。";
+            StatusMessage = "AI 建议已生成，原始文件没有被修改。";
+            return true;
+        }
+        catch (TaskCanceledException)
+        {
+            AiRequestStatus = "模型请求超时，请稍后重试或缩小选区。";
+            return false;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or PaperAgentApiException)
+        {
+            AiRequestStatus = $"生成建议失败：{exception.Message}";
+            return false;
+        }
+        finally
+        {
+            IsAiBusy = false;
+        }
     }
 
     public async Task LoadProjectsAsync()
@@ -205,6 +359,7 @@ public sealed class MainViewModel : ObservableObject
 
             SourcePath = source.Path;
             SourceText = source.Content;
+            ClearAiSuggestion();
             StatusMessage = $"已定位到 {result.SourcePath} 第 {result.Line} 行。";
             return result;
         }
@@ -422,5 +577,13 @@ public sealed class MainViewModel : ObservableObject
         PdfPreviewHint = SelectedDocument?.IsLatex == true
             ? "正在检查 PDF 预览……"
             : "编译成功后，这里会显示 PDF 页面。";
+    }
+
+    private void ClearAiSuggestion()
+    {
+        AiOriginalText = string.Empty;
+        AiSuggestedText = string.Empty;
+        AiExplanation = string.Empty;
+        AiRequestStatus = "在左侧源码中选中一小段，再点击“生成 AI 建议”。";
     }
 }

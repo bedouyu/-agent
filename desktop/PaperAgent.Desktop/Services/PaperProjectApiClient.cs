@@ -174,6 +174,33 @@ public sealed class PaperProjectApiClient
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
+    public async Task<AiStatus> GetAiStatusAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await _httpClient.GetAsync("api/ai/status", cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<AiStatus>(cancellationToken)
+               ?? throw new InvalidOperationException("后端没有返回 AI 配置状态。");
+    }
+
+    public async Task<AiSuggestion> SuggestLatexAsync(
+        string projectId,
+        string documentId,
+        string sourcePath,
+        string selectedText,
+        string mode,
+        string model,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new AiSuggestionRequest(sourcePath, selectedText, mode, model);
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"api/ai/projects/{projectId}/documents/{documentId}/suggest",
+            request,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<AiSuggestion>(cancellationToken)
+               ?? throw new InvalidOperationException("后端没有返回润色建议。");
+    }
+
     private static async Task EnsureSuccessAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
@@ -198,6 +225,12 @@ public sealed class PaperProjectApiClient
     }
 
     private sealed record CreateProjectRequest(string Name, string Description);
+
+    private sealed record AiSuggestionRequest(
+        string SourcePath,
+        string SelectedText,
+        string Mode,
+        string Model);
 
     private sealed record PdfPreviewManifest(int Dpi, List<PdfPageInfo> Pages);
 

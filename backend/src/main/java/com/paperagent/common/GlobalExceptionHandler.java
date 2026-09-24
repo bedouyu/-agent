@@ -1,9 +1,11 @@
 package com.paperagent.common;
 
+import com.paperagent.ai.AiServiceException;
 import com.paperagent.document.DocumentStorageException;
 import com.paperagent.document.DocumentValidationException;
 import com.paperagent.document.LatexToolUnavailableException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -62,6 +64,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public ApiError handleLatexToolUnavailable(LatexToolUnavailableException exception) {
         return error("LATEX_TOOL_UNAVAILABLE", exception.getMessage());
+    }
+
+    @ExceptionHandler(AiServiceException.class)
+    public ResponseEntity<ApiError> handleAiService(AiServiceException exception) {
+        return ResponseEntity.status(exception.status())
+                .body(new ApiError(exception.code(), exception.getMessage(), Map.of(), Instant.now()));
     }
 
     private ApiError error(String code, String message) {

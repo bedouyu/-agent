@@ -141,11 +141,19 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <Border Padding="10,7" Background="#F9FAFB" BorderBrush="#EAECF0" BorderThickness="0,0,0,1">
-                                    <TextBlock Text="{Binding SourcePath}"
-                                               FontFamily="Consolas"
-                                               Foreground="#344054"
-                                               TextTrimming="CharacterEllipsis" />
+                                <Border Padding="10,5" Background="#F9FAFB" BorderBrush="#EAECF0" BorderThickness="0,0,0,1">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Margin="10,0,0,0"
+                                                Padding="8,4"
+                                                Content="生成 AI 建议"
+                                                Click="OnGenerateAiSuggestionClick" />
+                                        <TextBlock Text="{Binding SourcePath}"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="Consolas"
+                                                   Foreground="#344054"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
                                 </Border>
                                 <TextBox x:Name="SourceEditor"
                                          Grid.Row="1"
@@ -206,6 +214,79 @@
                                 </ListBox>
                             </Grid>
                         </Border>
+                    </Grid>
+                </TabItem>
+
+                <TabItem x:Name="AiTab" Header="AI 润色与格式建议">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="130" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="{Binding AiConfigurationStatus}"
+                                   FontWeight="SemiBold"
+                                   Foreground="#344054" />
+
+                        <WrapPanel Grid.Row="1" Margin="0,10,0,4" VerticalAlignment="Center">
+                            <TextBlock Text="任务" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="AiModePicker" Width="120" SelectedIndex="0" Margin="0,0,18,0">
+                                <ComboBoxItem Content="语言润色" Tag="POLISH" />
+                                <ComboBoxItem Content="格式建议" Tag="FORMAT" />
+                            </ComboBox>
+                            <TextBlock Text="模型" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox Width="170"
+                                      ItemsSource="{Binding AiModels}"
+                                      SelectedItem="{Binding AiSelectedModel, Mode=TwoWay}" />
+                        </WrapPanel>
+
+                        <StackPanel Grid.Row="2" Margin="0,4,0,10">
+                            <TextBlock Text="在此选择任务和模型，再回到“PDF 与源码”选中片段并点击“生成 AI 建议”。"
+                                       Foreground="#667085" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding AiRequestStatus}"
+                                       Foreground="#475467" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <DockPanel Grid.Column="0">
+                                <TextBlock DockPanel.Dock="Top" Text="选中的原文" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <TextBox Text="{Binding AiOriginalText, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" />
+                            </DockPanel>
+                            <DockPanel Grid.Column="2">
+                                <Button DockPanel.Dock="Top"
+                                        Content="复制建议"
+                                        Click="OnCopyAiSuggestionClick"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,0,0,4" />
+                                <TextBox Text="{Binding AiSuggestedText, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" />
+                            </DockPanel>
+                        </Grid>
+
+                        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Top" Text="修改说明" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <TextBox Text="{Binding AiExplanation, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto" />
+                        </DockPanel>
                     </Grid>
                 </TabItem>
 
