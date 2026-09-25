@@ -224,7 +224,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="130" />
+                              <RowDefinition Height="190" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Text="{Binding AiConfigurationStatus}"
@@ -244,7 +244,7 @@
                         </WrapPanel>
 
                         <StackPanel Grid.Row="2" Margin="0,4,0,10">
-                            <TextBlock Text="在此选择任务和模型，再回到“PDF 与源码”选中片段并点击“生成 AI 建议”。"
+                            <TextBlock Text="编辑 Agent 生成候选建议，审查 Agent 复核；回到“PDF 与源码”选中片段并点击“生成 AI 建议”。"
                                        Foreground="#667085" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding AiRequestStatus}"
                                        Foreground="#475467" TextWrapping="Wrap" />
@@ -281,6 +281,9 @@
                         </Grid>
 
                         <DockPanel Grid.Row="4" Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Top" Text="Agent 执行与复核" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding AiAgentSteps}" Foreground="#475467" Margin="0,0,0,4" TextWrapping="Wrap" />
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding AiReviewText}" Foreground="#475467" Margin="0,0,0,8" TextWrapping="Wrap" />
                             <TextBlock DockPanel.Dock="Top" Text="修改说明" FontWeight="SemiBold" Margin="0,0,0,6" />
                             <TextBox Text="{Binding AiExplanation, Mode=OneWay}"
                                      IsReadOnly="True"

@@ -47,7 +47,9 @@ public partial class MainWindow : Window
         string mode = (AiModePicker.SelectedItem as ComboBoxItem)?.Tag as string ?? "POLISH";
         MessageBoxResult confirmation = MessageBox.Show(
             this,
-            $"即将把选中的 {selectedText.Length} 个字符发送给 DeepSeek（{_viewModel.AiSelectedModel}），可能产生 API 费用。\n\n确认继续？",
+            $"将把选中的 {selectedText.Length} 个字符发送给 DeepSeek（{_viewModel.AiSelectedModel}）生成建议。" +
+            "如果本地检查通过，还会发送原文与候选建议给审查 Agent 复核。" +
+            "最多两次模型调用，可能产生 API 费用；不会自动修改论文文件。\n\n确认继续？",
             "确认发送论文片段",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);

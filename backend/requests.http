@@ -42,7 +42,10 @@ GET http://127.0.0.1:18080/api/projects/项目ID/documents/文档ID/source
 ### 10. 检查 AI 密钥是否已被后端读取（不会返回密钥本身）
 GET http://127.0.0.1:18080/api/ai/status
 
-### 11. 请求选中 LaTeX 片段的建议（先把 selectedText 换成 sourcePath 对应文件中真实存在的文字；会产生 API 请求）
+### 11. 查看已注册的专职 Agent（不会发起模型调用）
+GET http://127.0.0.1:18080/api/ai/agents
+
+### 12. 请求选中 LaTeX 片段的建议（先把 selectedText 换成 sourcePath 对应文件中真实存在的文字；最多两次模型调用）
 POST http://127.0.0.1:18080/api/ai/projects/项目ID/documents/文档ID/suggest
 Content-Type: application/json
 

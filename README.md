@@ -12,7 +12,7 @@
 - Windows 客户端创建论文项目 → Java API → H2 保存 → 客户端显示。
 - 选择项目并上传 `.zip`、`.tex` 或 `.docx` → 后端校验文件 → 原稿保存到本地 → H2 记录文档信息。
 - 选择 LaTeX 文档 → TeX Live 编译 → 应用内预览 PDF → 点击 PDF → SyncTeX 定位到 `.tex` 文件和行号。
-- 选中 LaTeX 源码片段 → 确认发送给 DeepSeek → 查看润色或格式建议 → 手动复制建议。
+- 选中 LaTeX 源码片段 → 确认发送范围和最多两次模型调用 → 编辑 Agent 生成建议 → 审查 Agent 复核 → 手动复制建议。
 
 格式修改以 UTF-8 LaTeX 工程为主。推荐把包含 `main.tex`、章节源码、参考文献和图片的完整目录压缩为 ZIP 后导入。后续 Agent 会生成修改建议和新版本，不直接覆盖原稿。DOCX 可作为润色或内容参考文件。
 
@@ -43,9 +43,11 @@ build-all.cmd  编译后端、运行测试并编译客户端
 1. 将 `DEEPSEEK_API_KEY` 保存为 Windows 用户环境变量；重启 IDEA，再运行后端。密钥不要写入 `application.yml`、Java 源码或 Git。
 2. 打开前端的“AI 润色与格式建议”页，确认显示“已读取本机 DeepSeek 密钥”，并选择任务与模型。
 3. 切回“PDF 与源码”，选中不超过 2000 个字符的 LaTeX 片段，点击“生成 AI 建议”并确认发送。
-4. 对照原文阅读建议和说明。程序只展示、复制建议，不自动覆盖原始 `.tex`。
+4. 对照原文阅读建议、Agent 执行过程和复核结论。程序只展示、复制建议，不自动覆盖原始 `.tex`。复核结论也不能代替人工检查。
 
-只有你确认发送的选中片段会请求 DeepSeek API；这一步需要联网，可能产生 API 费用。模型状态接口不会返回密钥。`deepseek-flash` 是默认模型，也可选 `deepseek-v4-pro`。
+确认后，编辑 Agent 将选中片段发送给 DeepSeek；若本地安全检查通过，审查 Agent 还会将该片段及候选建议发送给 DeepSeek 复核。一次操作最多两次模型调用，需要联网并可能产生 API 费用。若引用、标签、环境或数学分隔符发生可疑变化，审查 Agent 不会发起第二次调用，而是提示人工检查。模型状态接口不会返回密钥。`deepseek-flash` 是默认模型，也可选 `deepseek-v4-pro`。
+
+多 Agent 的编排代码在 `backend/src/main/java/com/paperagent/agent/`。当前是“编辑 → 审查”的有序流程，**还没有自动修改、编译、重试的循环**。新增专职 Agent 可实现 `PaperAgent` 接口、注册为 Spring 组件，并用 `@Order` 指定顺序；模型通信经过 `AiModelGateway` 接口，当前由 `DeepSeekService` 实现，以后可替换为 Spring AI 适配器。
 
 默认 TeX Live 路径是 `D:\texlive\texlive\2026\bin\windows`。换电脑后如路径不同，启动后端前设置环境变量 `LATEX_BIN_DIR` 即可，不需要改 Java 代码。
 
@@ -77,6 +79,7 @@ POST http://127.0.0.1:18080/api/projects/{项目ID}/documents/{文档ID}/compile
 GET  http://127.0.0.1:18080/api/projects/{项目ID}/documents/{文档ID}/preview
 GET  http://127.0.0.1:18080/api/projects/{项目ID}/documents/{文档ID}/synctex?page=1&x=100&y=100
 GET  http://127.0.0.1:18080/api/ai/status
+GET  http://127.0.0.1:18080/api/ai/agents
 POST http://127.0.0.1:18080/api/ai/projects/{项目ID}/documents/{文档ID}/suggest
 ```
 
@@ -95,7 +98,7 @@ POST http://127.0.0.1:18080/api/ai/projects/{项目ID}/documents/{文档ID}/sugg
 
 迁移到另一台电脑时，复制整个项目目录即可；目标电脑需要 Java 17、Maven、.NET 10 SDK 和 TeX Live。开发工具安装说明见 [tools/install-dev-tools.ps1](tools/install-dev-tools.ps1)。
 
-后端仅监听 `127.0.0.1`。项目、源码、PDF 和数据库保存在本机 `data/` 下；仅手动确认的选中片段会发送给 DeepSeek 生成建议。
+后端仅监听 `127.0.0.1`。项目、源码、PDF 和数据库保存在本机 `data/` 下；仅手动确认的选中片段及其候选建议可能发送给 DeepSeek。论文正文、模型回复和密钥不写入数据库或日志。
 
 ## 推荐阅读
 

@@ -85,4 +85,43 @@ class DeepSeekServiceTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void reviewerShouldReceiveOnlyOriginalAndCandidate() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/chat/completions", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            String answer = mapper.writeValueAsString(Map.of(
+                    "approved", true,
+                    "explanation", "保留了原意"
+            ));
+            String response = mapper.writeValueAsString(Map.of(
+                    "choices", List.of(Map.of("finish_reason", "stop", "message", Map.of("content", answer)))
+            ));
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            DeepSeekService service = new DeepSeekService(
+                    mapper, HttpClient.newHttpClient(),
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/chat/completions"),
+                    "local-test-key"
+            );
+
+            ModelReviewDecision decision = service.review("原文", "候选", "FORMAT", "deepseek-flash");
+
+            assertThat(decision.approved()).isTrue();
+            JsonNode sent = mapper.readTree(requestBody.get());
+            String content = sent.path("messages").path(1).path("content").asText();
+            assertThat(content).contains("原文", "候选").doesNotContain("main.tex");
+        } finally {
+            server.stop(0);
+        }
+    }
 }

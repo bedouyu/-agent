@@ -22,6 +22,8 @@ public sealed class MainViewModel : ObservableObject
     private string _aiOriginalText = string.Empty;
     private string _aiSuggestedText = string.Empty;
     private string _aiExplanation = string.Empty;
+    private string _aiReviewText = string.Empty;
+    private string _aiAgentSteps = string.Empty;
     private string _aiSelectedModel = "deepseek-flash";
     private int _aiMaxSelectionCharacters = 2_000;
     private bool _isAiBusy;
@@ -185,6 +187,18 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _aiExplanation, value);
     }
 
+    public string AiReviewText
+    {
+        get => _aiReviewText;
+        private set => SetProperty(ref _aiReviewText, value);
+    }
+
+    public string AiAgentSteps
+    {
+        get => _aiAgentSteps;
+        private set => SetProperty(ref _aiAgentSteps, value);
+    }
+
     public string AiSelectedModel
     {
         get => _aiSelectedModel;
@@ -256,10 +270,12 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             IsAiBusy = true;
-            AiRequestStatus = "正在等待 DeepSeek 返回建议……";
+            AiRequestStatus = "编辑 Agent 正在生成建议，审查 Agent 随后复核……";
             AiOriginalText = selectedText;
             AiSuggestedText = string.Empty;
             AiExplanation = string.Empty;
+            AiReviewText = string.Empty;
+            AiAgentSteps = string.Empty;
             AiSuggestion suggestion = await _apiClient.SuggestLatexAsync(
                 project.Id,
                 document.Id,
@@ -278,7 +294,18 @@ public sealed class MainViewModel : ObservableObject
             AiOriginalText = suggestion.OriginalText;
             AiSuggestedText = suggestion.SuggestedTex;
             AiExplanation = suggestion.Explanation;
-            AiRequestStatus = $"{suggestion.Model} 已生成建议。请对照原文检查后再手动使用。";
+            AiReviewText = suggestion.Review is null
+                ? "尚无复核结论，请人工检查。"
+                : $"审查 Agent：{(suggestion.Review.Approved ? "未发现明显问题" : "需要人工复查")}。" +
+                  suggestion.Review.Explanation +
+                  (suggestion.Review.Warnings.Count == 0
+                      ? string.Empty
+                      : "\n本地检查：" + string.Join("；", suggestion.Review.Warnings));
+            AiAgentSteps = string.Join(" → ", suggestion.AgentSteps.Select(step =>
+                $"{step.AgentId}（{step.Status}）"));
+            AiRequestStatus = suggestion.Review?.Approved == true
+                ? $"{suggestion.Model} 已生成建议，复核未发现明显问题；使用前仍请人工检查。"
+                : $"{suggestion.Model} 已生成建议，但复核未通过或未完成；请仔细人工检查。";
             StatusMessage = "AI 建议已生成，原始文件没有被修改。";
             return true;
         }
@@ -584,6 +611,8 @@ public sealed class MainViewModel : ObservableObject
         AiOriginalText = string.Empty;
         AiSuggestedText = string.Empty;
         AiExplanation = string.Empty;
+        AiReviewText = string.Empty;
+        AiAgentSteps = string.Empty;
         AiRequestStatus = "在左侧源码中选中一小段，再点击“生成 AI 建议”。";
     }
 }

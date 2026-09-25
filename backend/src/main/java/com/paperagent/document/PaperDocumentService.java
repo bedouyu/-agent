@@ -2,7 +2,7 @@ package com.paperagent.document;
 
 import com.paperagent.ai.AiSuggestionRequest;
 import com.paperagent.ai.AiSuggestionResponse;
-import com.paperagent.ai.DeepSeekService;
+import com.paperagent.agent.AgentOrchestrator;
 import com.paperagent.common.ResourceNotFoundException;
 import com.paperagent.project.PaperProject;
 import com.paperagent.project.PaperProjectRepository;
@@ -22,20 +22,20 @@ public class PaperDocumentService {
     private final PaperDocumentRepository documentRepository;
     private final DocumentStorageService storageService;
     private final LatexCompileService latexCompileService;
-    private final DeepSeekService deepSeekService;
+    private final AgentOrchestrator agentOrchestrator;
 
     public PaperDocumentService(
             PaperProjectRepository projectRepository,
             PaperDocumentRepository documentRepository,
             DocumentStorageService storageService,
             LatexCompileService latexCompileService,
-            DeepSeekService deepSeekService
+            AgentOrchestrator agentOrchestrator
     ) {
         this.projectRepository = projectRepository;
         this.documentRepository = documentRepository;
         this.storageService = storageService;
         this.latexCompileService = latexCompileService;
-        this.deepSeekService = deepSeekService;
+        this.agentOrchestrator = agentOrchestrator;
     }
 
     @Transactional
@@ -130,7 +130,6 @@ public class PaperDocumentService {
         latexCompileService.openPdf(workspaceOf(document));
     }
 
-    @Transactional(readOnly = true)
     public AiSuggestionResponse suggestWithAi(
             String projectId,
             String documentId,
@@ -146,7 +145,8 @@ public class PaperDocumentService {
                 || !normalizeLineEndings(source.content()).contains(normalizedSelection)) {
             throw new DocumentValidationException("选中的内容与当前 LaTeX 源文件不一致，请重新选择");
         }
-        return deepSeekService.suggest(
+        // 模型调用可能较慢；不要把数据库事务保持到两个 Agent 完成之后。
+        return agentOrchestrator.suggest(
                 source.path(),
                 normalizedSelection,
                 request.mode(),

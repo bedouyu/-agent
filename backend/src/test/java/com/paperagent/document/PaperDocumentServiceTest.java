@@ -1,7 +1,7 @@
 package com.paperagent.document;
 
-import com.paperagent.ai.DeepSeekService;
 import com.paperagent.ai.AiSuggestionRequest;
+import com.paperagent.agent.AgentOrchestrator;
 import com.paperagent.project.PaperProject;
 import com.paperagent.project.PaperProjectRepository;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ class PaperDocumentServiceTest {
     private LatexCompileService latexCompileService;
 
     @Mock
-    private DeepSeekService deepSeekService;
+    private AgentOrchestrator agentOrchestrator;
 
     @Test
     void uploadShouldConnectTheStoredFileToItsProject() {
@@ -63,7 +63,7 @@ class PaperDocumentServiceTest {
                 documentRepository,
                 storageService,
                 latexCompileService,
-                deepSeekService
+                agentOrchestrator
         );
         PaperDocumentResponse response = service.upload(project.getId(), file);
 
@@ -102,7 +102,7 @@ class PaperDocumentServiceTest {
                 documentRepository,
                 storageService,
                 latexCompileService,
-                deepSeekService
+                agentOrchestrator
         );
 
         assertThatThrownBy(() -> service.suggestWithAi(
@@ -110,6 +110,6 @@ class PaperDocumentServiceTest {
                 document.getId(),
                 new AiSuggestionRequest("main.tex", "不在源码中的文本", "POLISH", "deepseek-flash")
         )).isInstanceOf(DocumentValidationException.class);
-        verifyNoInteractions(deepSeekService);
+        verifyNoInteractions(agentOrchestrator);
     }
 }
